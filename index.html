@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REST ENFORCER v1.1</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #00ff88;
+    --accent2: #ff3355;
+    --accent3: #ffcc00;
+    --text: #e8e8f0;
+    --muted: #555570;
+    --work-color: #00aaff;
+    --break-color: #00ff88;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    width: 420px;
+    max-width: 95vw;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .status-dot.inactive { background: var(--muted); box-shadow: none; animation: none; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 36px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card.active::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  .phase-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .timer-display {
+    font-family: 'Space Mono', monospace;
+    font-size: 72px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 6px;
+    transition: color 0.5s;
+    letter-spacing: -2px;
+  }
+
+  .timer-display.work { color: var(--work-color); }
+  .timer-display.break-phase { color: var(--break-color); }
+  .timer-display.idle { color: var(--muted); }
+
+  .progress-track {
+    height: 3px;
+    background: var(--border);
+    margin: 20px 0;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    transition: width 1s linear, background 0.5s;
+    background: var(--work-color);
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    margin: 20px 0;
+  }
+
+  .info-cell { background: var(--surface); padding: 14px 16px; }
+  .info-cell-label { font-size: 9px; color: var(--muted); text-transform: uppercase; font-family: 'Space Mono', monospace; }
+  .info-cell-value { font-family: 'Space Mono', monospace; font-size: 20px; font-weight: 700; color: var(--text); }
+
+  .btn {
+    width: 100%;
+    padding: 16px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-start { background: var(--accent); color: #000; font-weight: 700; }
+  .btn-stop { background: transparent; color: var(--accent2); border: 1px solid var(--accent2); margin-top: 8px; }
+
+  .settings { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+  .setting-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .setting-label { font-size: 12px; color: var(--text); opacity: 0.7; }
+  .setting-control { display: flex; align-items: center; gap: 4px; }
+  .setting-btn { width: 32px; height: 32px; background: var(--border); border: none; color: var(--text); cursor: pointer; font-size: 14px; }
+  .setting-btn:hover { background: #2a2a3a; }
+  .setting-value { font-family: 'Space Mono', monospace; font-size: 14px; min-width: 50px; text-align: center; color: var(--accent); }
+
+  #lockOverlay {
+    position: fixed; inset: 0; z-index: 9999;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.98); backdrop-filter: blur(20px);
+  }
+
+  .lock-timer { font-family: 'Space Mono', monospace; font-size: 88px; font-weight: 700; color: var(--accent); }
+  .lock-message { font-size: 14px; color: var(--muted); margin-top: 20px; }
+
+  #permNotice {
+    background: rgba(255, 204, 0, 0.1);
+    color: var(--accent3);
+    padding: 8px;
+    font-size: 11px;
+    margin-bottom: 16px;
+    border: 1px solid var(--accent3);
+    cursor: pointer;
+    text-align: center;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div class="logo">Rest Enforcer v1.1</div>
+    <div class="status-dot inactive" id="statusDot"></div>
+  </div>
+
+  <div id="permNotice" onclick="requestPermission()">
+    ⚠️ 通知がオフです。YouTube視聴中も警告を出すにはここをクリックして許可してください。
+  </div>
+
+  <div class="card" id="mainCard">
+    <div class="phase-label" id="phaseLabel">STANDBY</div>
+    <div class="timer-display idle" id="timerDisplay">00:00</div>
+    <div class="cycle-count" id="cycleCount"></div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill" style="width:0%"></div>
+    </div>
+
+    <div class="info-grid">
+      <div class="info-cell">
+        <div class="info-cell-label">作業残り</div>
+        <div class="info-cell-value" id="workTimeDisplay">00:00</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-cell-label">休憩時間</div>
+        <div class="info-cell-value" id="breakTimeDisplay">00:00</div>
+      </div>
+    </div>
+
+    <button class="btn btn-start" id="startBtn" onclick="startSession()">▶ 執行開始</button>
+    <button class="btn btn-stop" id="stopBtn" style="display:none" onclick="stopSession()">■ 停止</button>
+
+    <div class="settings" id="settingsPanel">
+      <div class="setting-row">
+        <span class="setting-label">作業時間</span>
+        <div class="setting-control">
+          <button class="setting-btn" onclick="adjust('work', -60)">-1m</button>
+          <button class="setting-btn" onclick="adjust('work', -1)">-1s</button>
+          <span class="setting-value" id="workVal">60</span><span style="font-size:10px">s</span>
+          <button class="setting-btn" onclick="adjust('work', 1)">+1s</button>
+          <button class="setting-btn" onclick="adjust('work', 60)">+1m</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">休憩時間</span>
+        <div class="setting-control">
+          <button class="setting-btn" onclick="adjust('break', -1)">-1s</button>
+          <span class="setting-value" id="breakVal">10</span><span style="font-size:10px">s</span>
+          <button class="setting-btn" onclick="adjust('break', 1)">+1s</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="lockOverlay">
+  <div class="lock-label">REST ENFORCEMENT ACTIVE</div>
+  <div class="lock-timer" id="lockTimer">00:00</div>
+  <div class="lock-message" id="lockMessage">目を閉じてください。</div>
+</div>
+
+<script>
+  let workSeconds = 60;
+  let breakSeconds = 10;
+  let timer = null;
+  let phase = 'idle';
+  let elapsed = 0;
+  let cycleCount = 0;
+  let notifiedMarkers = new Set(); // 重複通知防止
+
+  function requestPermission() {
+    Notification.requestPermission().then(permission => {
+      if (permission === "granted") document.getElementById('permNotice').style.display = 'none';
+    });
+  }
+
+  if (Notification.permission !== "granted") {
+    document.getElementById('permNotice').style.display = 'block';
+  }
+
+  function sendNotify(title, body) {
+    if (Notification.permission === "granted") {
+      new Notification(title, { body: body, icon: "https://cdn-icons-png.flaticon.com/512/2550/2550324.png" });
+    }
+  }
+
+  function fmt(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  function adjust(type, delta) {
+    if (phase !== 'idle') return;
+    if (type === 'work') {
+      workSeconds = Math.max(1, workSeconds + delta);
+      document.getElementById('workVal').textContent = workSeconds;
+      document.getElementById('workTimeDisplay').textContent = fmt(workSeconds);
+    } else {
+      breakSeconds = Math.max(1, breakSeconds + delta);
+      document.getElementById('breakVal').textContent = breakSeconds;
+      document.getElementById('breakTimeDisplay').textContent = fmt(breakSeconds);
+    }
+  }
+
+  function startSession() {
+    phase = 'work';
+    elapsed = 0;
+    notifiedMarkers.clear();
+    updateUI();
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = 'block';
+    document.getElementById('settingsPanel').style.display = 'none';
+    document.getElementById('statusDot').classList.remove('inactive');
+    document.getElementById('mainCard').classList.add('active');
+    timer = setInterval(tick, 1000);
+  }
+
+  function tick() {
+    elapsed++;
+    let total = phase === 'work' ? workSeconds : breakSeconds;
+    let remaining = total - elapsed;
+
+    if (phase === 'work') {
+      document.getElementById('timerDisplay').textContent = fmt(remaining);
+      document.getElementById('progressFill').style.width = (elapsed / total * 100) + '%';
+      
+      // 通知ロジック
+      checkNotifications(remaining);
+
+      if (remaining <= 0) {
+        phase = 'break';
+        elapsed = 0;
+        cycleCount++;
+        showLock();
+      }
+    } else {
+      document.getElementById('lockTimer').textContent = fmt(remaining);
+      if (remaining <= 0) {
+        phase = 'work';
+        elapsed = 0;
+        notifiedMarkers.clear();
+        hideLock();
+        updateUI();
+      }
+    }
+  }
+
+  function checkNotifications(rem) {
+    const check = (targetSec, label) => {
+      if (rem === targetSec && !notifiedMarkers.has(targetSec)) {
+        sendNotify("REST ENFORCER", `作業終了まで残り${label}です。`);
+        notifiedMarkers.add(targetSec);
+      }
+    };
+
+    check(1800, "30分");
+    check(900, "15分");
+    check(300, "5分");
+    check(60, "1分");
+    check(10, "10秒");
+  }
+
+  function showLock() {
+    sendNotify("強制休憩開始", "直ちに作業を中断してください。");
+    document.getElementById('lockOverlay').style.display = 'flex';
+    document.getElementById('timerDisplay').className = 'timer-display break-phase';
+  }
+
+  function hideLock() {
+    sendNotify("休憩終了", "作業を再開してください。");
+    document.getElementById('lockOverlay').style.display = 'none';
+    document.getElementById('timerDisplay').className = 'timer-display work';
+  }
+
+  function updateUI() {
+    document.getElementById('timerDisplay').textContent = fmt(workSeconds);
+    document.getElementById('timerDisplay').className = 'timer-display work';
+    document.getElementById('phaseLabel').textContent = '作業中 — WORKING';
+  }
+
+  function stopSession() {
+    clearInterval(timer);
+    phase = 'idle';
+    document.getElementById('startBtn').style.display = 'block';
+    document.getElementById('stopBtn').style.display = 'none';
+    document.getElementById('settingsPanel').style.display = 'block';
+    document.getElementById('statusDot').classList.add('inactive');
+    document.getElementById('mainCard').classList.remove('active');
+    document.getElementById('timerDisplay').className = 'timer-display idle';
+  }
+
+  // 初期化
+  document.getElementById('workTimeDisplay').textContent = fmt(workSeconds);
+  document.getElementById('breakTimeDisplay').textContent = fmt(breakSeconds);
+</script>
+</body>
+</html>
